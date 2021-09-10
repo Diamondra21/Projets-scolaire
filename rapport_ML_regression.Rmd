@@ -1,0 +1,358 @@
+---
+title: "Projet Machine Learning"
+author: "Diamondra Rakotondraza"
+date: "Année académique : 2020-2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Les données utilisées concernent les prix de biens immobilier au King County, aux Etats-Unis. Les variables sont essentiellement quantitatives, et portent sur les caractéristiques des biens et la variables Y à expliquer est leur prix.
+
+Après une discussion avec le superviseur, on a donc décider d'employer les méthodes de régression par moindres carrés, regressions LASSO et Ridge dans le détail. 
+
+Nous comparerons les performances des modèles sur la base de la même métrique, le 
+
+
+
+
+## Nettoyage et analyse descriptive des données
+
+### Suppression de variables et qualité des données
+
+Nous supprimons dans un premier temps les variables jugées inutiles et inutilisables pour la construction de nos modèles de régression. 
+
+```{r}
+# Chargement des données
+df <- read.csv("C:/Users/Ascensio/Downloads/Machine_Learning/kc_house_data.csv")
+
+# Suppression des variables id (identifiants de chaque bien immobilier), date 
+df = df[,-c(1,2)]
+
+```
+Il reste quelques variables de types qualititatives, mais les codages des catégories sont numériques. On peut donc les utiliser pour construires nos modèles de régression.
+
+Vérifions maintenant si les données sont de qualité, selon le nombre de valeurs manquantes :
+```{r}
+sum(is.na(df))
+```
+Il n'y a aucune valeur manquante, donc les données sont bien utilisable pour analyse et construction de modèles de régression.
+
+### Analyse descriptive de la variable à expliquer
+
+En rappelant que la variable à expliquer est le prix des biens immobilier, une analyse descriptive de cette dernière est utile afin d'avoir une idée des valeurs qu'elle peut prendre.
+Commençons par voir les caractéristiques générales de la distribution de cette variable :
+```{r}
+summary(df$price)
+```
+```{r}
+# écart-type des prix
+sd(df$price)
+```
+La moyenne du prix des biens immobiliers du King County est d'environ 540 000 dollars. En comparaison, l'écart-type valant près de 367 000 dollars, est très important. 
+Représentons graphiquement la distribution des prix pour s'assurer du fait de cette importante disparité :
+
+```{r}
+boxplot(df$price, main = "Distribution des prix des biens immobilier")
+```
+
+On remarque qu'un nombre non négligeable de biens sont excessivement plus chères que la plupart qui ont leur prix proche de la moyenne. Ce qui créer une grande disparité entre les prix en dollars des biens.
+
+
+## Régression par moindres carrés
+
+A présent, appliquons la méthode par moindre carré, en vu de la création de notre premier modèle de régression. Cette méthode effectue la minimisation d'une fonction de risque empirique sous l’hypothèse d’un cout quadratique.
+
+```{r}
+model1<-lm(price~.,data=df)
+summary(model1)
+```
+
+Avec toutes les variables, le modèle obtenu semble plutôt correct au vu de la valeur du coefficient de détermination.
+Il est d'une valeur proche de 0.7, donc l'équation de la droite de régression détermine 70 % de l'ensemble des données.
+
+Nous n'obtenons pas d'estimation de coefficient pour la variable sqft_basement.
+
+On accepte l’hypothèse globale d’une relation linaire car la p-value de la F-statistic est trés faible. On la compare à un seuil alpha valant 5%. Hormis floors, on rejète l'hypothèse de nullité du coefficient des autres variables. variables car les p-values des variables sont significatives. Si la valeur associée à un coefficient de régression vaut 0, la variable associée n'influe pas la variable à expliquer.
+
+```{r}
+par(mfrow=c(2,2))
+plot(model1)
+```
+
+Néanmoins d'après les graphiques précédents, il semble y avoir le phénomène d'hétéroscédasticité. La variance de la variable que l’on veut prédire n’est pas constante sur le domaine de la variable aléatoire que l’on utilise. Et une petites partie des observations, ne semblent pas venir d'une distribution normale.
+
+Il va donc maintenant s'agir de sélectionner les variables qui constitueront notre modèle.
+
+### Sélection de variables
+
+La sélection de variables s'est faites sur la base de la recherche exhaustive. Etant donné qu'on a une variable dont le modèle ne donne pas sa p-value (NA), les recherches pas-à-pas sont jugées moins pertinentes.
+
+#### Recherche exhaustive
+
+On considère ici toutes les combinaisons de sous-modèles possibles. Il y a 18 variables explicatives, donc 262 143 possibilités. Le meilleur modèle sera sélectionner selon le critère donné. On en comparera plusieurs, afin de voir si les résultats trouvés sont globalement cohérents. A savoir la somme du carrés des résidus la plus faible, le plus grand R^2 ajusté, les critères BIC, AIC et le C_p de Mallow.
+```{r}
+library(leaps)
+comb_model1<-regsubsets(price~.,data= df, nvmax=18)
+selection<-summary(comb_model1)
+```
+On représente graphiquement les résultats selon les critères choisis. Les optimums sont indiqués par un point rouge :
+
+```{r}
+par(mfrow=c(2,3))
+plot(selection$rss, xlab="Nombre de variables",ylab="Somme des carrés des résidus",type="l", main ="Somme du carré des résidus")
+u<-which.min(selection$rss)
+points(u,selection$rss[u],pch=20,col="red")
+
+plot(selection$adjr2, xlab="Nombre de variables",ylab="R2 ajust\U00E9",type="l", main="R2 Ajust\U00E9")
+u<-which.max(selection$adjr2)
+points(u,selection$adjr2[u],pch=20,col="red")
+
+plot(selection$cp, xlab="Nombre de variables",ylab="Cp",type="l", main="Cp de Mallows")
+u<-which.min(selection$cp)
+points(u,selection$cp[u],pch=20,col="red")
+
+plot(selection$bic, xlab="Nombre de variables",ylab="BIC",type="l", main="BIC")
+u<-which.min(selection$bic)
+points(u,selection$bic[u],pch=20,col="red")
+
+plot(selection$bic, xlab="Nombre de variables",ylab="AIC",type="l", main="AIC")
+u<-which.min(selection$aic)
+points(u,selection$bic[u],pch=20,col="red")
+
+
+```
+
+Le critère BIC indique que le modèle idéal comporte 15 variables et les autres 17.
+
+Par conséquons, voyons quelles variables sont sélectionnées pour les modèles pour chaque critère.
+```{r}
+plot(comb_model1, scale="bic")
+```
+
+
+```{r}
+plot(comb_model1, scale="Cp")
+```
+
+```{r}
+plot(comb_model1, scale="adjr2")
+```
+
+La variable n'est pas incluse dans les modèles à 17 variables sous la base des critères BIC, du plus grand R^2 ajusté et C_p de Mallow.
+
+Comparons les valeurs des coefficients de détermination des modèles idéals pour le critère BIC (15 variables) et les autres (17 variables) d'après la recherche exhaustive.
+
+```{r}
+# modèle à 17 variables
+model1_17<-lm(price~bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above+sqft_basement+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15,data=df)
+summary(model1_17)
+```
+```{r}
+# modèle à 15 variables
+model1_15<-lm(price~bedrooms+bathrooms+sqft_living+waterfront+view+condition+grade+sqft_above+sqft_basement+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15,data=df)
+summary(model1_15)
+```
+
+On obtient un meilleur modèle avec 17 variables, avec une valeur supérieure de R². Toutefois le meilleur modèle est celui qui comporte toute les 18 variables.
+
+#### Sélection par erreur de prédiction
+
+```{r}
+set.seed(1)
+appr<-sample(c(TRUE,FALSE), nrow(df), rep=TRUE)
+test<-(!appr)
+
+regappr<-regsubsets(price~.,data=df[appr,], nvmax=18)
+
+X.test<-model.matrix(price~.,data=df[test,])
+
+regappr<-regsubsets(price~.,data=df[appr,], nvmax=18)
+X.test<-model.matrix(price~.,data=df[test,])
+error<-rep(NA,18)
+for (i in 1:17)
+{
+  coefi<-coef(regappr,id=i)
+  pred<-X.test[,names(coefi)]%*%coefi
+  error[i]<-mean((df$price[test]-pred)^2)
+}
+
+```
+
+
+```{r}
+which.min(error)
+```
+
+```{r}
+coef(regappr,16)
+```
+```{r}
+summary(lm(price~bedrooms+bathrooms+sqft_living+sqft_lot+waterfront+view+condition+grade+yr_built+sqft_basement+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15,data=df ))
+```
+
+#### Validation croisée
+
+```{r}
+k<-10
+set.seed(1)
+plis<-sample(1:k, nrow(df),replace=TRUE)
+vc.erreur<-matrix(NA,k,18, dimnames=list(NULL,paste(1:18)))
+```
+
+```{r}
+table(plis)
+```
+
+```{r}
+predict.regsubsets=function(object,newdata,id,...){
+  form=as.formula(object$call[[2]])
+  mat=model.matrix(form,newdata)
+  coefi=coef(object,id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+for(j in 1:k)
+{
+cv.reg<-regsubsets(price~.,data=df[plis!=j,], nvmax=18)
+  for(i in 1:17)
+    {
+    pred<-predict(cv.reg, df[plis==j,],id=i)
+    vc.erreur[j,i]<-mean((df$price[plis==j]-pred)^2)
+    }
+}
+```
+
+```{r}
+moy.vc.erreur<-apply(vc.erreur,2,mean)
+plot(moy.vc.erreur, type='b', col="blue")
+```
+
+```{r}
+which.min(moy.vc.erreur)
+```
+
+```{r}
+reg.best<-regsubsets(price~.,data=df, nvmax=18)
+names(coef(reg.best,16))
+```
+
+
+### Régression Ridge
+
+Contrairement à la régression par moindre carré, la regression Ridge garde toute les variables explicatives. Il n'y a donc pas d'étape de sélection de variable. La fonction de risque diffère, au niveau du fait qu'une pénalité est ajouté sur les coefficients de la régression.
+Selon la valeur d'un paramètre de réglage lambda (positif), on force les coefficients à tendre vers 0 quand lambda croît.
+Donc le but est de trouver une valeur de lamdba 
+
+```{r}
+library(ISLR)
+library(glmnet)
+
+x<-model.matrix(price~.,df) #matrice des variables explicatives
+y<-df$price #vecteur de la variable à expliquer
+
+
+
+
+# 1. Régression ridge
+
+# La fonction glmnet effectue la régression de façon automatique 
+# sur un ensemble de 100 valeurs de lambda.  
+regridge<-glmnet(x,y,alpha=0)
+```
+
+
+```{r}
+grid<-10^seq(10,-2,length=100)
+
+regridge<-glmnet(x,y,alpha=0,lambda=grid)# Effectue la régression ridge 
+# pour les 100 valeurs de lambda définies par grid.
+
+plot(regridge,xvar="lambda")
+```
+
+```{r}
+set.seed(1)
+set.seed(1)
+appr<-sample(1:nrow(x), nrow(x)/2) # on choisit 131.5 soit 132 indices donc joueurs aléatoirement. 
+test<-(-appr)
+y.test<-y[test]
+vc.out<-cv.glmnet(x[appr,],y[appr],alpha=0)
+plot(vc.out)
+
+```
+
+```{r}
+lamopti<-vc.out$lambda.min
+lamopti
+```
+
+
+```{r}
+ridge<-glmnet(x[appr,],y[appr],alpha=0,lambda=lamopti, thresh=1e-12)
+
+pred.ridge<-predict(ridge,s=lamopti,newx=x[test,])
+mean((pred.ridge-y.test)^2)
+out<-glmnet(x,y,alpha=0)
+predict(out,type="coefficients",s=lamopti)
+
+```
+
+### Régression LASSO
+
+```{r}
+reglasso<-glmnet(x[appr,],y[appr],alpha=1,lambda=grid)
+plot(reglasso)
+
+```
+
+```{r}
+set.seed(1)
+vc.out=cv.glmnet(x[appr,],y[appr],alpha=1)
+plot(vc.out)
+
+
+```
+```{r}
+lamopti=vc.out$lambda.min
+lamopti
+```
+
+
+```{r}
+pred.lasso<-predict(reglasso,s=lamopti,newx=x[test,])
+mean((pred.lasso-y.test)^2)
+```
+
+```{r}
+out<-glmnet(x,y,alpha=1,lambda=grid)
+coef.lasso<-predict(out,type="coefficients",s=lamopti)[1:20,]
+coef.lasso
+```
+
+
+```{r}
+coef.lasso[coef.lasso!=0]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
